@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – FINAL GOLD/SILVER EDITION
+TERA NEWS WATCHER – FINAL UNBLOCKED GOLD/SILVER EDITION
 1. Gümüş (Silver) analiz ve yorumları eklendi.
-2. Google linkleri engellenmiyor.
+2. DOMAIN FİLTRESİ TAMAMEN KALDIRILDI (Haber kaçırma riski sıfırlandı).
 3. Dakika sınırı yok (Haber varsa anında gelir).
 4. Tarih filtresi: Son 36 saat.
 """
@@ -166,21 +166,7 @@ def is_recent(dt: datetime) -> bool:
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# DOMAIN FILTER
-# ======================================================
-ALLOWED = {
-    "kap.org.tr", "borsagundem.com", "bloomberght.com", "investing.com",
-    "mynet.com", "bigpara.com", "terayatirim.com", "terayatirim.com.tr",
-    "x.com", "twitter.com"
-}
-def domain_ok(link: str) -> bool:
-    try:
-        host = urlparse(link).hostname or ""
-        return any(host.endswith(d) for d in ALLOWED)
-    except: return False
-
-# ======================================================
-# FEEDS LİSTESİ (GÜMÜŞ EKLENDİ)
+# FEEDS LİSTESİ (GÜMÜŞ DAHİL)
 # ======================================================
 FEEDS = [
     # --- TERA GRUBU ---
@@ -197,7 +183,7 @@ FEEDS = [
 ]
 
 # ======================================================
-# FEED ÇEKİCİ
+# FEED ÇEKİCİ (FİLTRESİZ)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -213,9 +199,8 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             if not is_recent(dt):
                 continue
 
-            # Domain kontrolü
-            link = entry.get("link", "")
-            if not domain_ok(link): continue
+            # NOT: Domain filtresi TAMAMEN KALDIRILDI.
+            # Google linkleri (news.google.com) artık engellenmeyecek.
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
