@@ -1,14 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – FINAL UNBLOCKED EDITION
-1. Domain filtresi kaldırıldı (Google linkleri artık engellenmiyor).
-2. Dakika sınırı kaldırıldı (Saat içinde her an bildirim atabilir).
-3. Tarih filtresi: Son 36 saat (Gece gelen haberleri kaçırmaz).
+TERA NEWS WATCHER – FINAL GOLD/SILVER EDITION
+1. Gümüş (Silver) analiz ve yorumları eklendi.
+2. Google linkleri engellenmiyor.
+3. Dakika sınırı yok (Haber varsa anında gelir).
+4. Tarih filtresi: Son 36 saat.
 """
 
 import os
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 from typing import NamedTuple, Optional
 
 import requests
@@ -121,7 +123,7 @@ def maybe_send_no_news(now_local: datetime) -> None:
     if last_tag == tag:
         return
 
-    msg = f"🟡 Bugün ({now_local.date()}) TERA ile ilgili yeni haber yok."
+    msg = f"🟡 Bugün ({now_local.date()}) Takip listesinde yeni haber yok."
     send_telegram(msg)
     save_last_no_news_tag(tag)
 
@@ -164,19 +166,38 @@ def is_recent(dt: datetime) -> bool:
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# FEED LİSTESİ (Filtreler burada yapılıyor zaten)
+# DOMAIN FILTER
+# ======================================================
+ALLOWED = {
+    "kap.org.tr", "borsagundem.com", "bloomberght.com", "investing.com",
+    "mynet.com", "bigpara.com", "terayatirim.com", "terayatirim.com.tr",
+    "x.com", "twitter.com"
+}
+def domain_ok(link: str) -> bool:
+    try:
+        host = urlparse(link).hostname or ""
+        return any(host.endswith(d) for d in ALLOWED)
+    except: return False
+
+# ======================================================
+# FEEDS LİSTESİ (GÜMÜŞ EKLENDİ)
 # ======================================================
 FEEDS = [
+    # --- TERA GRUBU ---
     ("Tera Yatırım", "https://news.google.com/rss/search?q=Tera+Yatırım&hl=tr&gl=TR&ceid=TR:tr"),
     ("Tera Yatirim", "https://news.google.com/rss/search?q=Tera+Yatirim&hl=tr&gl=TR&ceid=TR:tr"),
     ("TEHOL",        "https://news.google.com/rss/search?q=TEHOL&hl=tr&gl=TR&ceid=TR:tr"),
     ("TRHOL",        "https://news.google.com/rss/search?q=TRHOL&hl=tr&gl=TR&ceid=TR:tr"),
     ("TLY",          "https://news.google.com/rss/search?q=TLY&hl=tr&gl=TR&ceid=TR:tr"),
     ("FSU",          "https://news.google.com/rss/search?q=FSU&hl=tr&gl=TR&ceid=TR:tr"),
+    
+    # --- EMTİA & GÜMÜŞ GRUBU (YENİ) ---
+    ("Gümüş Analiz", "https://news.google.com/rss/search?q=Gümüş+yorum+analiz&hl=tr&gl=TR&ceid=TR:tr"),
+    ("Gümüş Piyasası", "https://news.google.com/rss/search?q=Gümüş+ons+gram+haberleri&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ (Domain Filtresi Kaldırıldı!)
+# FEED ÇEKİCİ
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -192,8 +213,9 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             if not is_recent(dt):
                 continue
 
-            # NOT: Domain filtresi kaldırıldı çünkü Google linkleri yönlendirmeli geliyor.
-            # Zaten RSS sorgumuzda 'site:kap.org.tr' vb. var, Google bizim için filtreliyor.
+            # Domain kontrolü
+            link = entry.get("link", "")
+            if not domain_ok(link): continue
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
@@ -256,7 +278,6 @@ def cron():
     t = request.args.get("token", "")
     if CRON_TOKEN and t != CRON_TOKEN:
         return jsonify({"ok": False, "error": "unauthorized"}), 403
-
     count = job()
     return jsonify({"ok": True, "new_items": count}), 200
 
