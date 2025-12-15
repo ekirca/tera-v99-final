@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
 TERA NEWS WATCHER – FINAL UNBLOCKED GOLD/SILVER EDITION
-1. Gümüş (Silver) analiz ve yorumları eklendi.
-2. DOMAIN FİLTRESİ TAMAMEN KALDIRILDI (Haber kaçırma riski sıfırlandı).
-3. Dakika sınırı yok (Haber varsa anında gelir).
+1. Gümüş (Silver) ve Tera haberlerini takip eder.
+2. DOMAIN FİLTRESİ YOKTUR: Google'dan gelen her kaynağı kabul eder.
+   (CNN, Mynet, Paratic, YouTube vb. engellenmez).
+3. Dakika sınırı yoktur.
 4. Tarih filtresi: Son 36 saat.
 """
 
@@ -64,7 +65,7 @@ def send_telegram(text: str) -> None:
         pass
 
 # ======================================================
-# DOSYA YÖNETİMİ (Seen & Tags)
+# DOSYA YÖNETİMİ
 # ======================================================
 def load_seen() -> set:
     if not os.path.exists(SEEN_FILE):
@@ -108,18 +109,12 @@ def maybe_send_no_news(now_local: datetime) -> None:
     Hafta içi 08:00–18:00 arası.
     Dakika sınırı YOK. O saat için atılmadıysa atar.
     """
-    # Hafta sonu mu? (Cumartesi=5, Pazar=6)
-    if now_local.weekday() > 4:
-        return
-
-    # Mesai saatleri dışı mı?
-    if not (8 <= now_local.hour <= 18):
-        return
+    if now_local.weekday() > 4: return
+    if not (8 <= now_local.hour <= 18): return
 
     tag = now_local.strftime("%Y-%m-%d %H")
     last_tag = load_last_no_news_tag()
 
-    # Bu saat için zaten mesaj attıysak sus.
     if last_tag == tag:
         return
 
@@ -131,18 +126,14 @@ def maybe_send_no_news(now_local: datetime) -> None:
 # TARİH AYRIŞTIRMA (Son 36 Saat)
 # ======================================================
 def parse_date(entry) -> Optional[datetime]:
-    # RSS'ten tarih bilgisini çekmeyi dener
     if getattr(entry, "published_parsed", None):
         try:
             return datetime.fromtimestamp(time.mktime(entry.published_parsed), tz=timezone.utc)
         except: pass
-        
     if getattr(entry, "updated_parsed", None):
         try:
             return datetime.fromtimestamp(time.mktime(entry.updated_parsed), tz=timezone.utc)
         except: pass
-        
-    # String formatları dener
     for field in ["published", "updated", "pubDate"]:
         if field in entry:
             try:
@@ -153,20 +144,14 @@ def parse_date(entry) -> Optional[datetime]:
     return None
 
 def is_recent(dt: datetime) -> bool:
-    """
-    Takvim gününe bakmaz. Şu andan geriye doğru 36 saat içindeki her şeyi alır.
-    """
     if not dt: return False
     now_utc = datetime.now(timezone.utc)
     diff = now_utc - dt
-    
-    # Gelecek tarihli hatalı haberleri engelle
     if diff.days < -1: return False
-    # 36 saatten eskiyse alma
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# FEEDS LİSTESİ (GÜMÜŞ DAHİL)
+# FEEDS LİSTESİ (GÜMÜŞ & TERA)
 # ======================================================
 FEEDS = [
     # --- TERA GRUBU ---
@@ -177,13 +162,14 @@ FEEDS = [
     ("TLY",          "https://news.google.com/rss/search?q=TLY&hl=tr&gl=TR&ceid=TR:tr"),
     ("FSU",          "https://news.google.com/rss/search?q=FSU&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # --- EMTİA & GÜMÜŞ GRUBU (YENİ) ---
-    ("Gümüş Analiz", "https://news.google.com/rss/search?q=Gümüş+yorum+analiz&hl=tr&gl=TR&ceid=TR:tr"),
-    ("Gümüş Piyasası", "https://news.google.com/rss/search?q=Gümüş+ons+gram+haberleri&hl=tr&gl=TR&ceid=TR:tr"),
+    # --- GÜMÜŞ GRUBU (GENİŞLETİLMİŞ) ---
+    ("Gümüş Son Dakika", "https://news.google.com/rss/search?q=Gümüş+haberleri+son+dakika&hl=tr&gl=TR&ceid=TR:tr"),
+    ("Gümüş Yorum",      "https://news.google.com/rss/search?q=Gümüş+yorum+analiz+uzman&hl=tr&gl=TR&ceid=TR:tr"),
+    ("Gümüş Fiyat",      "https://news.google.com/rss/search?q=Gümüş+gram+ons+fiyatı&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ (FİLTRESİZ)
+# FEED ÇEKİCİ (FİLTRESİZ!)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -195,12 +181,12 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             dt = parse_date(entry)
             if not dt: continue
             
-            # Tarih kontrolü (Son 36 saat mi?)
+            # Tarih kontrolü (Son 36 saat)
             if not is_recent(dt):
                 continue
 
-            # NOT: Domain filtresi TAMAMEN KALDIRILDI.
-            # Google linkleri (news.google.com) artık engellenmeyecek.
+            # DİKKAT: Domain kontrolü (domain_ok) TAMAMEN KALDIRILDI.
+            # Google News ne veriyorsa kabul ediyoruz.
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
@@ -229,14 +215,12 @@ def job() -> int:
         
         # 1. Yeni haberleri gönder
         for it in new_items:
-            # Başlık ve Linki temizle
             title = it.entry.get('title', 'Haber Başlığı Yok')
             link = it.entry.get('link', '#')
-            
             msg = f"📰 <b>{it.feed_name}</b>\n{title}\n{link}"
             send_telegram(msg)
         
-        # 2. Haber yoksa ve zamanıysa "Haber Yok" bildirimi at
+        # 2. Haber yoksa (sadece hafta içi mesai saatlerinde) bildir
         now_local = datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
         if not new_items:
             maybe_send_no_news(now_local)
