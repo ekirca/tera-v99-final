@@ -1,17 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – FINAL UNBLOCKED GOLD/SILVER EDITION
-1. Gümüş (Silver) ve Tera haberlerini takip eder.
-2. DOMAIN FİLTRESİ YOKTUR: Google'dan gelen her kaynağı kabul eder.
-   (CNN, Mynet, Paratic, YouTube vb. engellenmez).
-3. Dakika sınırı yoktur.
-4. Tarih filtresi: Son 36 saat.
+TERA NEWS WATCHER – SILVER MASTER EDITION
+1. SADECE GÜMÜŞ (Silver) odaklıdır. Tera/Hisse takibi kaldırıldı.
+2. Yabancı kurumların (JP Morgan, Goldman vb.) Türkçe'ye çevrilmiş analizlerini yakalar.
+3. Ons ve Gram gümüş teknik analizlerini takip eder.
+4. Domain filtresi yoktur (Maksimum haber akışı).
 """
 
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 from typing import NamedTuple, Optional
 
 import requests
@@ -29,14 +27,14 @@ TZ_OFFSET          = int(os.getenv("TZ_OFFSET_HOURS", "3"))
 SEEN_FILE = "seen_ids.txt"
 LAST_NO_NEWS_FILE = "last_no_news_tag.txt"
 
-# Google'ın bizi bot sanıp engellememesi için tarayıcı kimliği
+# Tarayıcı Kimliği (Google Bot Korumasını Aşmak İçin)
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 })
 
 # ======================================================
-# DATA YAPILARI
+# DATA YAPISI
 # ======================================================
 class NewsItem(NamedTuple):
     published_dt: datetime
@@ -106,11 +104,10 @@ def save_last_no_news_tag(tag: str) -> None:
 # ======================================================
 def maybe_send_no_news(now_local: datetime) -> None:
     """
-    Hafta içi 08:00–18:00 arası.
-    Dakika sınırı YOK. O saat için atılmadıysa atar.
+    Hafta içi 08:00–23:00 arası (Gümüş piyasası gece de aktiftir).
     """
-    if now_local.weekday() > 4: return
-    if not (8 <= now_local.hour <= 18): return
+    if now_local.weekday() > 4: return # Hafta sonu kapalı
+    if not (8 <= now_local.hour <= 23): return
 
     tag = now_local.strftime("%Y-%m-%d %H")
     last_tag = load_last_no_news_tag()
@@ -118,7 +115,7 @@ def maybe_send_no_news(now_local: datetime) -> None:
     if last_tag == tag:
         return
 
-    msg = f"🟡 Bugün ({now_local.date()}) Takip listesinde yeni haber yok."
+    msg = f"⚪ Bugün ({now_local.date()}) Gümüş piyasasında yeni analiz yok."
     send_telegram(msg)
     save_last_no_news_tag(tag)
 
@@ -151,25 +148,24 @@ def is_recent(dt: datetime) -> bool:
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# FEEDS LİSTESİ (GÜMÜŞ & TERA)
+# GÜMÜŞ ODAKLI FEED LİSTESİ
 # ======================================================
 FEEDS = [
-    # --- TERA GRUBU ---
-    ("Tera Yatırım", "https://news.google.com/rss/search?q=Tera+Yatırım&hl=tr&gl=TR&ceid=TR:tr"),
-    ("Tera Yatirim", "https://news.google.com/rss/search?q=Tera+Yatirim&hl=tr&gl=TR&ceid=TR:tr"),
-    ("TEHOL",        "https://news.google.com/rss/search?q=TEHOL&hl=tr&gl=TR&ceid=TR:tr"),
-    ("TRHOL",        "https://news.google.com/rss/search?q=TRHOL&hl=tr&gl=TR&ceid=TR:tr"),
-    ("TLY",          "https://news.google.com/rss/search?q=TLY&hl=tr&gl=TR&ceid=TR:tr"),
-    ("FSU",          "https://news.google.com/rss/search?q=FSU&hl=tr&gl=TR&ceid=TR:tr"),
+    # 1. Yabancı Kurumların Türkçe Raporları (Goldman, Citi, JP Morgan vb.)
+    ("Gümüş (Global Raporlar)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+yabancı+banka+tahminleri&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # --- GÜMÜŞ GRUBU (GENİŞLETİLMİŞ) ---
-    ("Gümüş Son Dakika", "https://news.google.com/rss/search?q=Gümüş+haberleri+son+dakika&hl=tr&gl=TR&ceid=TR:tr"),
-    ("Gümüş Yorum",      "https://news.google.com/rss/search?q=Gümüş+yorum+analiz+uzman&hl=tr&gl=TR&ceid=TR:tr"),
-    ("Gümüş Fiyat",      "https://news.google.com/rss/search?q=Gümüş+gram+ons+fiyatı&hl=tr&gl=TR&ceid=TR:tr"),
+    # 2. Ons Gümüş Teknik Analiz (XAG/USD) - En kritik veridir.
+    ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+yorum&hl=tr&gl=TR&ceid=TR:tr"),
+    
+    # 3. Gram Gümüş (XAG/TRY) - Türkiye piyasası
+    ("Gümüş (Gram/TL)", "https://news.google.com/rss/search?q=Gram+gümüş+yorumları+uzman&hl=tr&gl=TR&ceid=TR:tr"),
+    
+    # 4. Genel Emtia Haberleri (Fed, Faiz kararlarının gümüşe etkisi)
+    ("Emtia & Gümüş", "https://news.google.com/rss/search?q=Gümüş+piyasası+son+dakika&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ (FİLTRESİZ!)
+# FEED ÇEKİCİ (FİLTRESİZ)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -181,12 +177,11 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             dt = parse_date(entry)
             if not dt: continue
             
-            # Tarih kontrolü (Son 36 saat)
+            # Tarih kontrolü
             if not is_recent(dt):
                 continue
 
-            # DİKKAT: Domain kontrolü (domain_ok) TAMAMEN KALDIRILDI.
-            # Google News ne veriyorsa kabul ediyoruz.
+            # Domain Filtresi YOK (Google'ın getirdiği her kaynağı kabul et)
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
@@ -213,14 +208,15 @@ def job() -> int:
         save_seen(seen)
         new_items.sort(key=lambda x: x.published_dt)
         
-        # 1. Yeni haberleri gönder
+        # 1. Haberleri Gönder
         for it in new_items:
-            title = it.entry.get('title', 'Haber Başlığı Yok')
+            title = it.entry.get('title', 'Başlık Yok')
             link = it.entry.get('link', '#')
-            msg = f"📰 <b>{it.feed_name}</b>\n{title}\n{link}"
+            # Gümüş simgesi ile gönder
+            msg = f"⚪ <b>{it.feed_name}</b>\n{title}\n{link}"
             send_telegram(msg)
         
-        # 2. Haber yoksa (sadece hafta içi mesai saatlerinde) bildir
+        # 2. Haber Yoksa Bildir
         now_local = datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
         if not new_items:
             maybe_send_no_news(now_local)
@@ -252,5 +248,5 @@ def cron():
 
 @app.get("/test")
 def test():
-    send_telegram("🧪 Sistem Testi Başarılı.")
+    send_telegram("🧪 Gümüş Takip Sistemi Testi Başarılı.")
     return "ok", 200
