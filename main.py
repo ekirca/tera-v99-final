@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – SILVER PRO EDITION (STRICT FILTER)
-1. SADECE GÜMÜŞ (Silver) analiz ve yorumları.
-2. KATI DOMAIN FİLTRESİ: Yozgat Hakimiyet vb. yerel siteler engellendi.
-   Sadece Bloomberg, Investing, Foreks gibi majör finans sitelerine izin var.
-3. Yabancı banka raporlarının Türkçe yansımalarını yakalar.
+TERA NEWS WATCHER – SILVER GLOBAL PRO EDITION
+1. TERA ve Hisse takibi TAMAMEN KALDIRILDI.
+2. SADECE GÜMÜŞ (Silver) odaklı global analizler (Türkçe kaynaklardan).
+3. Whitelist (Beyaz Liste) Aktif: Sadece majör finans siteleri kabul edilir.
 """
 
 import os
@@ -28,37 +27,34 @@ TZ_OFFSET          = int(os.getenv("TZ_OFFSET_HOURS", "3"))
 SEEN_FILE = "seen_ids.txt"
 LAST_NO_NEWS_FILE = "last_no_news_tag.txt"
 
-# Google Bot Koruması İçin Header
+# Google Bot Koruması
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 })
 
 # ======================================================
-# KATI GÜVENİLİR SİTE LİSTESİ (BEYAZ LİSTE)
+# GÜVENİLİR KAYNAKLAR (WHITE LIST)
 # ======================================================
-# Sadece bu uzantılarla biten sitelerden gelen haberler kabul edilir.
-TRUSTED_DOMAINS = {
-    # Finans Devleri
-    "bloomberght.com",
-    "investing.com",
-    "foreks.com",
-    "dunya.com",       # Dünya Gazetesi (Ekonomi için çok önemli)
-    "ekonomim.com",    # Ekonomi Gazetesi
-    "borsagundem.com",
+# Sadece bu kelimeleri içeren kaynaklardan gelen haberler kabul edilir.
+# Amerika'daki haberleri çeviren en güvenilir Türk kaynakları seçildi.
+TRUSTED_SOURCES = [
+    "bloomberght",
+    "investing",
+    "foreks",
+    "dunya.com",       # Dünya Gazetesi
+    "ekonomim",        # Ekonomi Gazetesi
+    "borsagundem",
     "doviz.com",
-    "paratic.com",
-    "bigpara.hurriyet.com.tr", # Hürriyet Bigpara
-    "uzmanpara.milliyet.com.tr", # Milliyet Uzmanpara
-    
-    # Güvenilir Ulusal Haber Kanalları (Ekonomi Sayfaları)
+    "paratic",
+    "bigpara",
+    "uzmanpara",
     "ntv.com.tr",
-    "cnnturk.com",
-    "haberturk.com",
-    "sozcu.com.tr",
-    "finans.mynet.com", # Mynet Finans
-    "paraajansi.com.tr"
-}
+    "cnnturk",
+    "haberturk",
+    "finans.mynet",
+    "tradingview"
+]
 
 # ======================================================
 # DATA YAPISI
@@ -141,7 +137,7 @@ def maybe_send_no_news(now_local: datetime) -> None:
     if last_tag == tag:
         return
 
-    msg = f"⚪ Bugün ({now_local.date()}) Seçkin kaynaklarda yeni Gümüş haberi yok."
+    msg = f"⚪ Bugün ({now_local.date()}) Global piyasalarda yeni Gümüş haberi yok."
     send_telegram(msg)
     save_last_no_news_tag(tag)
 
@@ -174,39 +170,24 @@ def is_recent(dt: datetime) -> bool:
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# DOMAIN FİLTRESİ (GÜVENLİK DUVARI)
-# ======================================================
-def domain_ok(link: str) -> bool:
-    """
-    Haberin geldiği site, bizim güvenilir listemizde (TRUSTED_DOMAINS) var mı?
-    """
-    try:
-        # Google News yönlendirmesi varsa bazen domain news.google.com görünür.
-        # Bu durumda Google'a izin verip içeriğin başlığına güveniriz, 
-        # VEYA Google'ın yönlendirdiği asıl domaini çözmeye çalışırız.
-        # Basitlik için: Link string'i içinde güvenilir domain geçiyor mu diye bakarız.
-        
-        link_lower = link.lower()
-        return any(d in link_lower for d in TRUSTED_DOMAINS)
-    except:
-        return False
-
-# ======================================================
-# FEED LİSTESİ (SADECE GÜMÜŞ)
+# FEED LİSTESİ (SADECE GÜMÜŞ & GLOBAL ANALİZ)
 # ======================================================
 FEEDS = [
-    # Yabancı banka tahminleri ve teknik analizler
-    ("Gümüş (Analiz & Tahmin)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+tahminleri+yabancı+banka+analiz&hl=tr&gl=TR&ceid=TR:tr"),
+    # Yabancı bankaların tahminleri (JP Morgan, Goldman vb. Türkçe yansımaları)
+    ("Gümüş (Global Tahmin)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+yabancı+banka+tahminleri&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # Ons Gümüş Teknik (XAG/USD)
-    ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+uzman+yorum&hl=tr&gl=TR&ceid=TR:tr"),
+    # Ons Gümüş Teknik Analiz (XAG/USD)
+    ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+uzman&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # Piyasalar Genel
-    ("Gümüş (Piyasa)", "https://news.google.com/rss/search?q=Gümüş+piyasası+son+dakika+Bloomberg+Investing&hl=tr&gl=TR&ceid=TR:tr"),
+    # Fed, Faiz ve Emtia Piyasası Etkileri
+    ("Gümüş (Piyasa/Fed)", "https://news.google.com/rss/search?q=Fed+faiz+gümüş+etkisi&hl=tr&gl=TR&ceid=TR:tr"),
+    
+    # Genel Son Dakika (Sadece güvenilir kaynaklardan)
+    ("Gümüş (Son Dakika)", "https://news.google.com/rss/search?q=Gümüş+haberleri+Bloomberg+Investing&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ
+# FEED ÇEKİCİ (AKILLI FİLTRE)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -222,21 +203,20 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             if not is_recent(dt):
                 continue
 
-            # 2. Kalite Kontrolü (Domain Filtresi)
-            link = entry.get("link", "") or entry.get("id", "")
-            source = entry.get("source", {}).get("title", "").lower() # RSS kaynağının adı
+            # 2. Kalite Kontrolü (Smart Whitelist)
+            # Linkin içinde VEYA Kaynak adında güvenilir siteler geçiyor mu?
             
-            # Linkin içinde veya Kaynak adında güvenilir sitelerden biri geçiyor mu?
-            # Örn: Linkte "bloomberght.com" var mı? Veya kaynak adı "Bloomberg HT" mi?
+            link = entry.get("link", "").lower()
+            source_title = entry.get("source", {}).get("title", "").lower()
             
-            is_trusted_link = any(d in link.lower() for d in TRUSTED_DOMAINS)
+            is_trusted = False
+            for t_source in TRUSTED_SOURCES:
+                if t_source in link or t_source in source_title:
+                    is_trusted = True
+                    break
             
-            # Google News bazen kaynak adını temiz verir, onu da kontrol edelim
-            # Örn: 'Milliyet', 'Dünya Gazetesi'
-            # Bunu domain listesiyle eşleştirmek zor olabilir, link kontrolü en sağlamıdır.
-            
-            if not is_trusted_link:
-                # Güvenilir listede değilse (Örn: Yozgat Hakimiyet), bu haberi atla.
+            if not is_trusted:
+                # Güvenilir değilse atla (Yozgat Hakimiyet vb. elenir)
                 continue
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
@@ -267,6 +247,7 @@ def job() -> int:
         for it in new_items:
             title = it.entry.get('title', 'Başlık Yok')
             link = it.entry.get('link', '#')
+            # Gümüş simgesi ile gönder
             msg = f"⚪ <b>{it.feed_name}</b>\n{title}\n{link}"
             send_telegram(msg)
         
@@ -279,7 +260,7 @@ def job() -> int:
         return 0
 
 # ======================================================
-# FLASK
+# FLASK SERVER
 # ======================================================
 app = Flask(__name__)
 
@@ -301,5 +282,5 @@ def cron():
 
 @app.get("/test")
 def test():
-    send_telegram("🧪 Gümüş Bot Test (Filtreli).")
+    send_telegram("🧪 Gümüş Global Takip Testi Başarılı.")
     return "ok", 200
