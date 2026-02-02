@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – SILVER GLOBAL PRO EDITION
-1. TERA ve Hisse takibi TAMAMEN KALDIRILDI.
-2. SADECE GÜMÜŞ (Silver) odaklı global analizler (Türkçe kaynaklardan).
-3. Whitelist (Beyaz Liste) Aktif: Sadece majör finans siteleri kabul edilir.
+TERA NEWS WATCHER – SILVER MASTER EDITION
+1. SADECE GÜMÜŞ (Silver) odaklıdır. Tera/Hisse takibi kaldırıldı.
+2. Yabancı kurumların (JP Morgan, Goldman vb.) Türkçe'ye çevrilmiş analizlerini yakalar.
+3. Ons ve Gram gümüş teknik analizlerini takip eder.
+4. Domain filtresi yoktur (Maksimum haber akışı).
 """
 
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 from typing import NamedTuple, Optional
 
 import requests
@@ -27,34 +27,11 @@ TZ_OFFSET          = int(os.getenv("TZ_OFFSET_HOURS", "3"))
 SEEN_FILE = "seen_ids.txt"
 LAST_NO_NEWS_FILE = "last_no_news_tag.txt"
 
-# Google Bot Koruması
+# Tarayıcı Kimliği (Google Bot Korumasını Aşmak İçin)
 SESSION = requests.Session()
 SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 })
-
-# ======================================================
-# GÜVENİLİR KAYNAKLAR (WHITE LIST)
-# ======================================================
-# Sadece bu kelimeleri içeren kaynaklardan gelen haberler kabul edilir.
-# Amerika'daki haberleri çeviren en güvenilir Türk kaynakları seçildi.
-TRUSTED_SOURCES = [
-    "bloomberght",
-    "investing",
-    "foreks",
-    "dunya.com",       # Dünya Gazetesi
-    "ekonomim",        # Ekonomi Gazetesi
-    "borsagundem",
-    "doviz.com",
-    "paratic",
-    "bigpara",
-    "uzmanpara",
-    "ntv.com.tr",
-    "cnnturk",
-    "haberturk",
-    "finans.mynet",
-    "tradingview"
-]
 
 # ======================================================
 # DATA YAPISI
@@ -66,7 +43,7 @@ class NewsItem(NamedTuple):
     item_id: str
 
 # ======================================================
-# TELEGRAM
+# TELEGRAM FONKSİYONU
 # ======================================================
 def send_telegram(text: str) -> None:
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -126,9 +103,10 @@ def save_last_no_news_tag(tag: str) -> None:
 # HABER YOK BİLDİRİMİ
 # ======================================================
 def maybe_send_no_news(now_local: datetime) -> None:
-    # Hafta sonu kapalı
-    if now_local.weekday() > 4: return
-    # Gece 23:00'e kadar takip (ABD piyasaları açık)
+    """
+    Hafta içi 08:00–23:00 arası (Gümüş piyasası gece de aktiftir).
+    """
+    if now_local.weekday() > 4: return # Hafta sonu kapalı
     if not (8 <= now_local.hour <= 23): return
 
     tag = now_local.strftime("%Y-%m-%d %H")
@@ -137,7 +115,7 @@ def maybe_send_no_news(now_local: datetime) -> None:
     if last_tag == tag:
         return
 
-    msg = f"⚪ Bugün ({now_local.date()}) Global piyasalarda yeni Gümüş haberi yok."
+    msg = f"⚪ Bugün ({now_local.date()}) Gümüş piyasasında yeni analiz yok."
     send_telegram(msg)
     save_last_no_news_tag(tag)
 
@@ -170,24 +148,24 @@ def is_recent(dt: datetime) -> bool:
     return diff <= timedelta(hours=36)
 
 # ======================================================
-# FEED LİSTESİ (SADECE GÜMÜŞ & GLOBAL ANALİZ)
+# GÜMÜŞ ODAKLI FEED LİSTESİ
 # ======================================================
 FEEDS = [
-    # Yabancı bankaların tahminleri (JP Morgan, Goldman vb. Türkçe yansımaları)
-    ("Gümüş (Global Tahmin)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+yabancı+banka+tahminleri&hl=tr&gl=TR&ceid=TR:tr"),
+    # 1. Yabancı Kurumların Türkçe Raporları (Goldman, Citi, JP Morgan vb.)
+    ("Gümüş (Global Raporlar)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+yabancı+banka+tahminleri&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # Ons Gümüş Teknik Analiz (XAG/USD)
-    ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+uzman&hl=tr&gl=TR&ceid=TR:tr"),
+    # 2. Ons Gümüş Teknik Analiz (XAG/USD) - En kritik veridir.
+    ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+yorum&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # Fed, Faiz ve Emtia Piyasası Etkileri
-    ("Gümüş (Piyasa/Fed)", "https://news.google.com/rss/search?q=Fed+faiz+gümüş+etkisi&hl=tr&gl=TR&ceid=TR:tr"),
+    # 3. Gram Gümüş (XAG/TRY) - Türkiye piyasası
+    ("Gümüş (Gram/TL)", "https://news.google.com/rss/search?q=Gram+gümüş+yorumları+uzman&hl=tr&gl=TR&ceid=TR:tr"),
     
-    # Genel Son Dakika (Sadece güvenilir kaynaklardan)
-    ("Gümüş (Son Dakika)", "https://news.google.com/rss/search?q=Gümüş+haberleri+Bloomberg+Investing&hl=tr&gl=TR&ceid=TR:tr"),
+    # 4. Genel Emtia Haberleri (Fed, Faiz kararlarının gümüşe etkisi)
+    ("Emtia & Gümüş", "https://news.google.com/rss/search?q=Gümüş+piyasası+son+dakika&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ (AKILLI FİLTRE)
+# FEED ÇEKİCİ (FİLTRESİZ)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -199,25 +177,11 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             dt = parse_date(entry)
             if not dt: continue
             
-            # 1. Tarih Kontrolü
+            # Tarih kontrolü
             if not is_recent(dt):
                 continue
 
-            # 2. Kalite Kontrolü (Smart Whitelist)
-            # Linkin içinde VEYA Kaynak adında güvenilir siteler geçiyor mu?
-            
-            link = entry.get("link", "").lower()
-            source_title = entry.get("source", {}).get("title", "").lower()
-            
-            is_trusted = False
-            for t_source in TRUSTED_SOURCES:
-                if t_source in link or t_source in source_title:
-                    is_trusted = True
-                    break
-            
-            if not is_trusted:
-                # Güvenilir değilse atla (Yozgat Hakimiyet vb. elenir)
-                continue
+            # Domain Filtresi YOK (Google'ın getirdiği her kaynağı kabul et)
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
@@ -227,7 +191,7 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
         return []
 
 # ======================================================
-# JOB
+# ANA GÖREV (JOB)
 # ======================================================
 def job() -> int:
     try:
@@ -244,6 +208,7 @@ def job() -> int:
         save_seen(seen)
         new_items.sort(key=lambda x: x.published_dt)
         
+        # 1. Haberleri Gönder
         for it in new_items:
             title = it.entry.get('title', 'Başlık Yok')
             link = it.entry.get('link', '#')
@@ -251,6 +216,7 @@ def job() -> int:
             msg = f"⚪ <b>{it.feed_name}</b>\n{title}\n{link}"
             send_telegram(msg)
         
+        # 2. Haber Yoksa Bildir
         now_local = datetime.now(timezone.utc) + timedelta(hours=TZ_OFFSET)
         if not new_items:
             maybe_send_no_news(now_local)
@@ -282,5 +248,5 @@ def cron():
 
 @app.get("/test")
 def test():
-    send_telegram("🧪 Gümüş Global Takip Testi Başarılı.")
+    send_telegram("🧪 Gümüş Takip Sistemi Testi Başarılı.")
     return "ok", 200
