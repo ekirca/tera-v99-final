@@ -1,17 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-TERA NEWS WATCHER – SILVER GLOBAL PRO (ELITE FILTER)
-1. TERA ve Hisse takibi TAMAMEN KALDIRILDI.
-2. SADECE GÜMÜŞ (Silver) odaklı global analizler.
-3. KATI DOMAIN FİLTRESİ (WHITELIST): Sadece Bloomberg, Investing, Foreks gibi 
-   majör ve uluslararası geçerliliği olan Türk kaynakları kabul edilir.
-   (Yerel gazeteler, bloglar engellenir).
+TERA NEWS WATCHER – SILVER GLOBAL PRO (SMART FIX)
+1. Sorun Düzeltildi: Google'ın şifreli linkleri (news.google.com) artık engellenmiyor.
+2. Akıllı Filtre: Haberin başlığında veya kaynağında "Bloomberg", "Investing" vb. geçiyorsa kabul eder.
+3. Eskişehir vb. yerel siteler hala engellidir.
 """
 
 import os
 import time
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlparse
 from typing import NamedTuple, Optional
 
 import requests
@@ -36,29 +33,33 @@ SESSION.headers.update({
 })
 
 # ======================================================
-# ELİT KAYNAKLAR (WHITE LIST)
+# GÜVENİLİR ANAHTAR KELİMELER (SMART WHITELIST)
 # ======================================================
-# Linkin içinde bu kelimelerden biri GEÇMEK ZORUNDADIR.
-# Geçmiyorsa (örn: eskisehirhaber.com), haber çöpe atılır.
-TRUSTED_SOURCES = [
-    "bloomberght",
+# Linkte, Başlıkta VEYA Kaynak isminde bunlardan biri geçerse haber alınır.
+TRUSTED_KEYWORDS = [
+    "bloomberg",
     "investing",
     "foreks",
-    "dunya.com",       # Dünya Gazetesi
-    "ekonomim",        # Ekonomi Gazetesi
+    "dunya",       # Dünya Gazetesi
+    "ekonomim",    # Ekonomi Gazetesi
     "borsagundem",
     "doviz.com",
     "paratic",
     "bigpara",
     "uzmanpara",
-    "ntv.com.tr",      # NTV Ekonomi
-    "cnnturk",         # CNN Türk Ekonomi
-    "haberturk",       # Habertürk Ekonomi
-    "finans.mynet",    # Mynet Finans
-    "tradingview",     # Teknik Analizler
-    "gcmforex",        # Aracı Kurum Analizleri
-    "integralyatirim",
-    "albforex"
+    "ntv",
+    "cnnturk",
+    "haberturk",
+    "mynet",
+    "tradingview",
+    "gcm",
+    "integral",
+    "alb yatirim",
+    "qnb",
+    "garanti",
+    "ziraat",
+    "yapı kredi",
+    "iş yatırım"
 ]
 
 # ======================================================
@@ -133,7 +134,7 @@ def save_last_no_news_tag(tag: str) -> None:
 def maybe_send_no_news(now_local: datetime) -> None:
     # Hafta sonu kapalı
     if now_local.weekday() > 4: return
-    # Gece 23:00'e kadar takip (Global piyasalar)
+    # Gece 23:00'e kadar takip
     if not (8 <= now_local.hour <= 23): return
 
     tag = now_local.strftime("%Y-%m-%d %H")
@@ -178,21 +179,14 @@ def is_recent(dt: datetime) -> bool:
 # FEED LİSTESİ (SADECE GÜMÜŞ & ANALİZ)
 # ======================================================
 FEEDS = [
-    # Yabancı bankaların tahminleri (JP Morgan, Goldman vb. Türkçe yansımaları)
     ("Gümüş (Global Tahmin)", "https://news.google.com/rss/search?q=Gümüş+fiyatı+yabancı+banka+tahminleri&hl=tr&gl=TR&ceid=TR:tr"),
-    
-    # Ons Gümüş Teknik Analiz (XAG/USD)
     ("Gümüş (Ons Teknik)", "https://news.google.com/rss/search?q=Gümüş+ons+teknik+analiz+uzman+yorum&hl=tr&gl=TR&ceid=TR:tr"),
-    
-    # Fed, Faiz ve Emtia Piyasası Etkileri
     ("Gümüş (Piyasa/Fed)", "https://news.google.com/rss/search?q=Fed+faiz+gümüş+fiyatları+etkisi&hl=tr&gl=TR&ceid=TR:tr"),
-    
-    # Genel Son Dakika (Sadece güvenilir kaynaklardan)
     ("Gümüş (Son Dakika)", "https://news.google.com/rss/search?q=Gümüş+haberleri+Bloomberg+Investing&hl=tr&gl=TR&ceid=TR:tr"),
 ]
 
 # ======================================================
-# FEED ÇEKİCİ (KATI FİLTRELİ)
+# FEED ÇEKİCİ (AKILLI FİLTRE)
 # ======================================================
 def fetch_feed(name: str, url: str) -> list[NewsItem]:
     try:
@@ -204,27 +198,29 @@ def fetch_feed(name: str, url: str) -> list[NewsItem]:
             dt = parse_date(entry)
             if not dt: continue
             
-            # 1. Tarih Kontrolü
+            # Tarih Kontrolü
             if not is_recent(dt):
                 continue
 
-            # 2. Kalite Kontrolü (Smart Whitelist)
-            # Linkin içinde TRUSTED_SOURCES listesindeki bir domain geçmek ZORUNDA.
-            
+            # --- AKILLI FİLTRE BAŞLANGICI ---
+            # Haberin tüm metinlerini birleştirip içinde anahtar kelime arıyoruz.
             link = entry.get("link", "").lower()
+            title = entry.get("title", "").lower()
+            source_title = entry.get("source", {}).get("title", "").lower() # RSS Kaynak adı
             
-            # Google News yönlendirmesi olsa bile linkin içinde hedef site yazar.
-            # Örn: ...google.com...url=https://www.bloomberght.com/...
+            # Tüm metin havuzu
+            full_text = f"{link} {title} {source_title}"
             
             is_trusted = False
-            for t_source in TRUSTED_SOURCES:
-                if t_source in link:
+            for keyword in TRUSTED_KEYWORDS:
+                if keyword in full_text:
                     is_trusted = True
                     break
             
             if not is_trusted:
-                # Güvenilir listede değilse (Eskişehir, Yozgat vb.) atla.
+                # İçinde Bloomberg, Investing vb. geçmiyorsa (Örn: eskisehirhaber.com) atla.
                 continue
+            # --- AKILLI FİLTRE BİTİŞİ ---
             
             _id = entry.get("id") or entry.get("link") or entry.get("title", "")
             out.append(NewsItem(dt, name, entry, _id))
@@ -254,7 +250,6 @@ def job() -> int:
         for it in new_items:
             title = it.entry.get('title', 'Başlık Yok')
             link = it.entry.get('link', '#')
-            # Gümüş simgesi ile gönder
             msg = f"⚪ <b>{it.feed_name}</b>\n{title}\n{link}"
             send_telegram(msg)
         
@@ -289,5 +284,5 @@ def cron():
 
 @app.get("/test")
 def test():
-    send_telegram("🧪 Gümüş Elite Takip Testi Başarılı.")
+    send_telegram("🧪 Gümüş Akıllı Takip Testi Başarılı.")
     return "ok", 200
